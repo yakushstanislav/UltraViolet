@@ -1,0 +1,52 @@
+#!/bin/sh
+# Pre-commit hook: format Go code and run linting
+# Install: make setup
+
+STAGED_GO_FILES=$(git diff --cached --name-only --diff-filter=ACMR -- '*.go')
+
+if [ -z "$STAGED_GO_FILES" ]; then
+    exit 0
+fi
+
+# --- 1. gofmt ---
+echo "==> gofmt"
+UNFORMATTED=$(gofmt -l $STAGED_GO_FILES)
+if [ -n "$UNFORMATTED" ]; then
+    gofmt -w $STAGED_GO_FILES
+    git add $STAGED_GO_FILES
+    echo "    auto-formatted:"
+    echo "$UNFORMATTED" | sed 's/^/      /'
+fi
+
+# --- 2. gofumpt (stricter gofmt) ---
+if command -v gofumpt >/dev/null 2>&1; then
+    echo "==> gofumpt"
+    gofumpt -w $STAGED_GO_FILES
+    git add $STAGED_GO_FILES
+else
+    echo "==> gofumpt: not found, skipping (install: go install mvdan.cc/gofumpt@latest)"
+fi
+
+# --- 3. goimports ---
+if command -v goimports >/dev/null 2>&1; then
+    echo "==> goimports"
+    goimports -w -local github.com/yakushstanislav/UltraViolet $STAGED_GO_FILES
+    git add $STAGED_GO_FILES
+else
+    echo "==> goimports: not found, skipping (install: go install golang.org/x/tools/cmd/goimports@latest)"
+fi
+
+# --- 4. golangci-lint ---
+if command -v golangci-lint >/dev/null 2>&1; then
+    echo "==> golangci-lint"
+    PACKAGES=$(echo "$STAGED_GO_FILES" | xargs -I{} dirname {} | sort -u | sed 's|^|./|')
+    if ! golangci-lint run $PACKAGES; then
+        echo ""
+        echo "  golangci-lint failed. Fix issues or use 'git commit --no-verify' to skip."
+        exit 1
+    fi
+else
+    echo "==> golangci-lint: not found, skipping (install: https://golangci-lint.run/usage/install/)"
+fi
+
+exit 0

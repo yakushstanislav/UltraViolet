@@ -1,0 +1,17 @@
+
+:root {
+  --bp-phone: 480px;
+  --bp-phablet: 640px;
+  --bp-tablet: 880px;
+  --touch-target: 44px;
+  --bottom-nav-h: 0px;
+  --topbar-h: 56px;
+
+  /* Responsive typography. Pinned values match legacy desktop sizes; the
+   * lower bound activates only on narrow viewports via clamp(). */
+  --fs-xs: clamp(11px, 2.4vw, 12px);
+  --fs-sm: clamp(12px, 2.6vw, 13px);
+  --fs-base: clamp(13px, 2.8vw, 14px);
+  --fs-h2: clamp(15px, 3.4vw, 18px);
+  --fs-h1: clamp(18px, 4.5vw, 22px);
+}

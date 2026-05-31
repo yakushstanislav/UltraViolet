@@ -1,0 +1,16 @@
+
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: uv-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["uv-api:9090"]
+  - job_name: uv-scanner
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["uv-scanner:9091"]
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

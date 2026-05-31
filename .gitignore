@@ -1,0 +1,46 @@
+
+# --- Go (service-api) ---
+service-api/bin/
+service-api/vendor/
+service-api/uv-api
+service-api/uv-scanner
+*.test
+*.out
+coverage.out
+coverage.html
+
+# --- Node (all frontends) ---
+**/node_modules/
+service-frontend/dist/
+service-frontend/build/
+service-frontend/*.tsbuildinfo
+service-documentation-frontend/docs/.vitepress/cache/
+service-documentation-frontend/docs/.vitepress/dist/
+
+# --- Release / packaging ---
+dist/
+service-env/images/
+service-env/backups/
+
+# --- Env / secrets (any directory) ---
+**/.env
+**/.env.*
+!**/.env.example
+service-env/secrets/*
+!service-env/secrets/.gitkeep
+
+# --- Database / GeoIP artifacts ---
+*.dump
+service-env/geoip/*.mmdb
+
+# --- IDE / OS / AI assistants (local) ---
+.DS_Store
+.idea/
+.vscode/
+.claude/
+.cursor/
+*.swp
+*~
+
+# --- Logs ---
+*.log

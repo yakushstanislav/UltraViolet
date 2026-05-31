@@ -1,0 +1,118 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: service-api/go.mod
+          cache-dependency-path: service-api/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: service-frontend/package-lock.json
+
+      - name: Log in to container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.REGISTRY_HOST }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build images
+        env:
+          UV_VERSION: ${{ github.ref_name }}
+          UV_REGISTRY: ${{ secrets.UV_REGISTRY }}
+        run: |
+          make -C service-api docker-release
+          make -C service-frontend docker-release
+          make -C service-documentation-frontend docker-release
+
+      - name: Scan images with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: image
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+          image-ref: ${{ secrets.UV_REGISTRY }}/uv-api:${{ github.ref_name }}
+
+      - name: Scan uv-scanner image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: image
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+          image-ref: ${{ secrets.UV_REGISTRY }}/uv-scanner:${{ github.ref_name }}
+
+      - name: Scan uv-frontend image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: image
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+          image-ref: ${{ secrets.UV_REGISTRY }}/uv-frontend:${{ github.ref_name }}
+
+      - name: Scan uv-documentation image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: image
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+          image-ref: ${{ secrets.UV_REGISTRY }}/uv-documentation:${{ github.ref_name }}
+
+      - name: Push images
+        env:
+          UV_VERSION: ${{ github.ref_name }}
+          UV_REGISTRY: ${{ secrets.UV_REGISTRY }}
+        run: |
+          make -C service-api docker-push
+          make -C service-frontend docker-push
+          make -C service-documentation-frontend docker-push
+
+      - name: Build release archives
+        env:
+          VERSION: ${{ github.ref_name }}
+          UV_REGISTRY: ${{ secrets.UV_REGISTRY }}
+        run: bash service-env/scripts/build-archives.sh
+
+      - name: Upload dist artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-archives-${{ github.ref_name }}
+          path: dist/*.tar.gz
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.tar.gz
+          generate_release_notes: true
+
+  offline-full:
+    name: Offline-full archive (optional seed)
+    runs-on: ubuntu-latest
+    needs: release
+    if: false
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Enable when CVE seed and GeoIP are available in CI"

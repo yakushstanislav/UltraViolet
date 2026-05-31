@@ -1,0 +1,138 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+        "enable": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "Scans in flight",
+      "type": "stat",
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(uv_scans_in_flight)", "refId": "A"}
+      ],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "colorMode": "value", "graphMode": "area"}
+    },
+    {
+      "title": "Queue depth",
+      "type": "timeseries",
+      "gridPos": {"h": 9, "w": 12, "x": 6, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "uv_queue_depth", "refId": "A", "legendFormat": "{{status}}"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "title": "Scan error rate (5m)",
+      "type": "timeseries",
+      "gridPos": {"h": 9, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum by (stage) (rate(uv_scan_errors_total[5m]))", "refId": "A", "legendFormat": "{{stage}}"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []}
+    },
+    {
+      "title": "Scan duration p95 (s)",
+      "type": "timeseries",
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 9},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum by (le, status) (rate(uv_scan_duration_seconds_bucket[5m])))", "refId": "A", "legendFormat": "p95 {{status}}"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []}
+    },
+    {
+      "title": "HTTP request latency p95 (s)",
+      "type": "timeseries",
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 9},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum by (le, method, path) (rate(uv_http_request_duration_seconds_bucket[5m])))", "refId": "A", "legendFormat": "{{method}} {{path}}"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []}
+    },
+    {
+      "title": "DB pool connections",
+      "type": "timeseries",
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 18},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "uv_db_connections_open", "refId": "A", "legendFormat": "open {{service}}"},
+        {"expr": "uv_db_connections_idle", "refId": "B", "legendFormat": "idle {{service}}"},
+        {"expr": "uv_db_connections_acquired", "refId": "C", "legendFormat": "acquired {{service}}"},
+        {"expr": "uv_db_connections_max", "refId": "D", "legendFormat": "max {{service}}"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "title": "CVE sync last success (age, s)",
+      "type": "stat",
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 18},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "time() - uv_cve_sync_last_success_seconds", "refId": "A"}
+      ],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "colorMode": "value"},
+      "fieldConfig": {"defaults": {"unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "yellow", "value": 86400}, {"color": "red", "value": 172800}]}}, "overrides": []}
+    },
+    {
+      "title": "CVE sync errors (rate /5m)",
+      "type": "timeseries",
+      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 18},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "rate(uv_cve_sync_errors_total[5m])", "refId": "A"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []}
+    },
+    {
+      "title": "Realtime events dropped (rate /5m)",
+      "type": "timeseries",
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 27},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(rate(uv_events_dropped_total[5m]))", "refId": "A", "legendFormat": "events dropped"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []}
+    },
+    {
+      "title": "Auth rate-limit rejects (rate /5m)",
+      "type": "timeseries",
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 27},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(rate(uv_http_requests_total{status=\"429\"}[5m]))", "refId": "A", "legendFormat": "429"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []}
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["ultraviolet"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "UltraViolet — Overview",
+  "uid": "uv-overview",
+  "version": 1,
+  "weekStart": ""
+}

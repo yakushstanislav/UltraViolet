@@ -1,0 +1,51 @@
+#
+# Development override — merged via COMPOSE_FILE in .env (or -f twice, or `make dev`).
+# pull_policy: build avoids pulling private registry images before local build.
+
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  uv-api:
+    pull_policy: build
+    build:
+      context: ../service-api
+      dockerfile: deploy/Dockerfile
+      args:
+        APP_NAME: uv-api
+    environment:
+      LOGGER_DEBUG: "true"
+      # Local dev keeps admin/admin and a placeholder JWT secret. Production
+      # bootstrap rejects both; see services/user.EnsureBootstrap.
+      APP_ENV: "development"
+      # Scanner holds up to 48 conns; API default 10 starves /v1/search under load.
+      POSTGRES_MAX_CONNECTIONS: "${API_POSTGRES_MAX_CONNECTIONS:-40}"
+      CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173}"
+
+  uv-scanner:
+    pull_policy: build
+    build:
+      context: ../service-api
+      dockerfile: deploy/Dockerfile
+      args:
+        APP_NAME: uv-scanner
+    environment:
+      LOGGER_DEBUG: "true"
+
+  service-frontend:
+    pull_policy: build
+    build:
+      context: ../service-frontend
+      dockerfile: deploy/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_REALTIME_URL: ${VITE_REALTIME_URL:-/realtime}
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-alpine}
+        NGINX_IMAGE: ${NGINX_IMAGE:-ghcr.io/nginxinc/nginx-unprivileged:stable-alpine}
+
+  uv-documentation:
+    pull_policy: build
+    build:
+      context: ../service-documentation-frontend
+      dockerfile: deploy/Dockerfile

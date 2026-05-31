@@ -1,0 +1,98 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    # Built-in Go tools
+    - govet
+    # Static analysis
+    - staticcheck
+    - ineffassign
+    # Correctness
+    - errcheck
+    - bodyclose
+    - nilerr
+    - durationcheck
+    - noctx
+    - rowserrcheck
+    - sqlclosecheck
+    - reassign
+    # Code quality
+    - misspell
+    - unconvert
+    - prealloc
+    - revive
+    - unused
+    - goconst
+    - nolintlint
+    - usestdlibvars
+    - perfsprint
+    - testifylint
+    - intrange
+    - whitespace
+    - recvcheck
+    # Blank lines / newlines style
+    - wsl_v5
+    - nlreturn
+
+  settings:
+    govet:
+      enable:
+        - shadow
+        - nilness
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    nlreturn:
+      block-size: 2
+    revive:
+      severity: warning
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: early-return
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: increment-decrement
+        - name: var-naming
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: redefines-builtin-id
+        - name: use-any
+        - name: useless-break
+        - name: confusing-naming
+
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+    gofumpt:
+      extra-rules: true
+    goimports:
+      local-prefixes:
+        - github.com/yakushstanislav/UltraViolet
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+run:
+  timeout: 5m

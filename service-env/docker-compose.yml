@@ -1,0 +1,476 @@
+#
+# Production-shaped stack: image pulls only (no build:). For local development use:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+# or: make dev
+#
+# uv-api / uv-scanner: POSTGRES_PASSWORD and AUTH_JWT_SECRET from .env (install.sh syncs from secrets/).
+# postgres: password via compose secret mount (POSTGRES_PASSWORD_FILE).
+
+# Shared log-rotation policy — without this docker-compose's default json-file
+# driver grows unbounded, and on a busy scanner host that fills the disk in
+# weeks. Override per-service via $LOG_MAX_SIZE / $LOG_MAX_FILE if needed.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "${LOG_MAX_SIZE:-100m}"
+    max-file: "${LOG_MAX_FILE:-10}"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    platform: linux/amd64
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_DB: ultraviolet
+      POSTGRES_USER: ultraviolet
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ultraviolet -d ultraviolet"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: "${POSTGRES_MEMORY_LIMIT:-6g}"
+
+  pgbouncer:
+    # Bitnami images are no longer on Docker Hub; edoburu is small and env-driven.
+    image: edoburu/pgbouncer:v1.25.1-p0
+    platform: linux/amd64
+    restart: unless-stopped
+    logging: *default-logging
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ultraviolet
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ultraviolet
+      # Postgres 16 defaults to SCRAM; md5 makes pgbouncer fail with "wrong password type".
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: "500"
+      DEFAULT_POOL_SIZE: "40"
+      MIN_POOL_SIZE: "5"
+      SERVER_IDLE_TIMEOUT: "300"
+      SERVER_LOGIN_RETRY: "3"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # TCP-only: pg_isready -U … logs a login attempt every tick; nc is silent.
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 5432"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: "${PGBOUNCER_MEMORY_LIMIT:-128m}"
+
+  chromium:
+    # Tiny headless-shell image (~250 MB) maintained by the chromedp project.
+    # Speaks Chrome DevTools Protocol on :9222; the screenshot worker dials
+    # /json/version to discover the per-browser WebSocket endpoint.
+    image: chromedp/headless-shell:latest
+    platform: linux/amd64
+    restart: unless-stopped
+    logging: *default-logging
+    # headless-shell/run.sh already binds Chrome on :9223 and socat-forwards :9222.
+    # Do not pass --remote-debugging-port=9222 here — it races socat and breaks CDP.
+    command:
+      - --disable-gpu
+      - --hide-scrollbars
+      - --mute-audio
+      - --ignore-certificate-errors
+    expose:
+      - "9222"
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: "${CHROMIUM_MEMORY_LIMIT:-1g}"
+
+  uv-api:
+    image: ${UV_REGISTRY:-docker.io/ultraviolet}/uv-api:${UV_VERSION:-dev}
+    platform: linux/amd64
+    restart: unless-stopped
+    logging: *default-logging
+    env_file:
+      - .env
+    environment:
+      LOGGER_NAME: uv-api
+      LOGGER_DEBUG: "${LOGGER_DEBUG:-false}"
+      SERVER_ADDR: ${SERVER_ADDR:-0.0.0.0}
+      SERVER_PORT: ${SERVER_PORT:-8080}
+      METRICS_ADDR: ${METRICS_ADDR:-0.0.0.0}
+      METRICS_PORT: ${METRICS_PORT:-9090}
+      REALTIME_ADDR: ${REALTIME_ADDR:-0.0.0.0}
+      REALTIME_PORT: ${REALTIME_PORT:-8081}
+      REALTIME_WS_ALLOWED_ROLES: ${REALTIME_WS_ALLOWED_ROLES:-viewer,operator,admin}
+      # Migrations and advisory locks require a real Postgres session; pgbouncer transaction mode breaks golang-migrate.
+      POSTGRES_ADDR: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USERNAME: ultraviolet
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DATABASE: ultraviolet
+      POSTGRES_SCHEMA_PATH: /ServiceAPI/migrations
+      POSTGRES_MAX_CONNECTIONS: "10"
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET}
+      AUTH_ACCESS_TTL: "${AUTH_ACCESS_TTL:-15m}"
+      AUTH_REFRESH_TTL: "${AUTH_REFRESH_TTL:-168h}"
+      AUTH_BOOTSTRAP_USERNAME: "${AUTH_BOOTSTRAP_USERNAME:-admin}"
+      AUTH_BOOTSTRAP_PASSWORD: "${AUTH_BOOTSTRAP_PASSWORD:-admin}"
+      AUTH_BOOTSTRAP_ROLE: "${AUTH_BOOTSTRAP_ROLE:-admin}"
+      AUTH_RATE_LIMIT_RPS: "${AUTH_RATE_LIMIT_RPS:-1}"
+      AUTH_RATE_LIMIT_BURST: "${AUTH_RATE_LIMIT_BURST:-5}"
+      AUDIT_TRUST_PROXY_HEADERS: "${AUDIT_TRUST_PROXY_HEADERS:-false}"
+      APP_ENV: "${APP_ENV:-production}"
+      CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173}"
+      SCAN_ALLOWED_CIDRS: "${SCAN_ALLOWED_CIDRS:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7,fe80::/10}"
+      SCAN_MAX_HOSTS: "${SCAN_MAX_HOSTS:-4096}"
+      SCAN_MAX_PORTS: "${SCAN_MAX_PORTS:-64}"
+      CVE_SYNC_BOOTSTRAP_FROM: "${CVE_SYNC_BOOTSTRAP_FROM:-262800h}"
+      RTSP_SNAPSHOT_ENABLED: "${RTSP_SNAPSHOT_ENABLED:-true}"
+      RTSP_SNAPSHOT_FFMPEG: "${RTSP_SNAPSHOT_FFMPEG:-ffmpeg}"
+      RTSP_SNAPSHOT_TIMEOUT: "${RTSP_SNAPSHOT_TIMEOUT:-12s}"
+      RTSP_SNAPSHOT_MAX_CONCURRENT: "${RTSP_SNAPSHOT_MAX_CONCURRENT:-4}"
+      ONVIF_COMMAND_ENABLED: "${ONVIF_COMMAND_ENABLED:-true}"
+      ONVIF_COMMAND_MAX_CONCURRENT: "${ONVIF_COMMAND_MAX_CONCURRENT:-8}"
+      ONVIF_COMMAND_TIMEOUT: "${ONVIF_COMMAND_TIMEOUT:-15s}"
+      ONVIF_COMMAND_RATE_LIMIT_RPS: "${ONVIF_COMMAND_RATE_LIMIT_RPS:-5}"
+      ONVIF_COMMAND_RATE_LIMIT_BURST: "${ONVIF_COMMAND_RATE_LIMIT_BURST:-20}"
+      ONVIF_RESPONSE_CACHE_TTL: "${ONVIF_RESPONSE_CACHE_TTL:-0s}"
+      ONVIF_RTSP_SNAPSHOT_ENABLED: "${ONVIF_RTSP_SNAPSHOT_ENABLED:-true}"
+      ONVIF_LAB_CREDENTIAL_PROBE_ENABLED: "${ONVIF_LAB_CREDENTIAL_PROBE_ENABLED:-false}"
+      ONVIF_LAB_CREDENTIALS_FILE: "${ONVIF_LAB_CREDENTIALS_FILE:-}"
+      ONVIF_LAB_CREDENTIAL_MAX_PAIRS: "${ONVIF_LAB_CREDENTIAL_MAX_PAIRS:-200}"
+      ONVIF_LAB_PER_ATTEMPT_TIMEOUT: "${ONVIF_LAB_PER_ATTEMPT_TIMEOUT:-6s}"
+      ONVIF_LAB_INTER_ATTEMPT_DELAY: "${ONVIF_LAB_INTER_ATTEMPT_DELAY:-100ms}"
+    ports:
+      - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
+      - "${REALTIME_PORT:-8081}:${REALTIME_PORT:-8081}"
+      - "${METRICS_PORT:-9090}:${METRICS_PORT:-9090}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./catalog-seed:/ServiceAPI/seed:ro
+      - ./geoip:/geoip:ro
+    healthcheck:
+      # HTTP starts only after migrations + optional CVE pg_restore (minutes on cold DB).
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/readyz >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 300s
+    # no-new-privileges breaks init.sh su-exec (setgroups); image drops to USER via su-exec.
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: "${UV_API_MEMORY_LIMIT:-2g}"
+
+  uv-scanner:
+    image: ${UV_REGISTRY:-docker.io/ultraviolet}/uv-scanner:${UV_VERSION:-dev}
+    platform: linux/amd64
+    restart: unless-stopped
+    logging: *default-logging
+    env_file:
+      - .env
+    healthcheck:
+      # BusyBox pgrep -x does not match comm "uv-scanner" when cmdline is /ServiceAPI/uv-scanner.
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 6
+    environment:
+      LOGGER_NAME: uv-scanner
+      LOGGER_DEBUG: "${LOGGER_DEBUG:-false}"
+      METRICS_ADDR: "${SCANNER_METRICS_ADDR:-0.0.0.0}"
+      METRICS_PORT: "${SCANNER_METRICS_PORT:-9091}"
+      POSTGRES_ADDR: pgbouncer
+      POSTGRES_PORT: "5432"
+      POSTGRES_USERNAME: ultraviolet
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DATABASE: ultraviolet
+      POSTGRES_MAX_CONNECTIONS: "${SCANNER_POSTGRES_MAX_CONNECTIONS:-20}"
+      SCANNER_WORKER_POLL_INTERVAL: "${SCANNER_WORKER_POLL_INTERVAL:-1s}"
+      SCANNER_BACKGROUND_POLL_INTERVAL: "${SCANNER_BACKGROUND_POLL_INTERVAL:-30s}"
+      SCANNER_PROGRESS_INTERVAL: "${SCANNER_PROGRESS_INTERVAL:-1s}"
+      SCANNER_PROBE_WORKERS: "${SCANNER_PROBE_WORKERS:-48}"
+      SCANNER_RUNNING_TTL: "${SCANNER_RUNNING_TTL:-1h}"
+      SCANNER_UDP_PROBE_PORTS: "${SCANNER_UDP_PROBE_PORTS:-161,123,5353,623}"
+      SCAN_ALLOWED_CIDRS: "${SCAN_ALLOWED_CIDRS:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7,fe80::/10}"
+      SCAN_MAX_HOSTS: "${SCAN_MAX_HOSTS:-4096}"
+      SCAN_MAX_PORTS: "${SCAN_MAX_PORTS:-64}"
+      PORTSCAN_WORKERS: "${PORTSCAN_WORKERS:-512}"
+      PORTSCAN_TIMEOUT: "${PORTSCAN_TIMEOUT:-2s}"
+      PORTSCAN_RATE_PER_SEC: "${PORTSCAN_RATE_PER_SEC:-5000}"
+      PORTSCAN_MAX_DIALS_PER_IP: "${PORTSCAN_MAX_DIALS_PER_IP:-64}"
+      MASSCAN_BINARY: "${MASSCAN_BINARY:-masscan}"
+      MASSCAN_RATE: "${MASSCAN_RATE:-3000}"
+      MASSCAN_RETRIES: "${MASSCAN_RETRIES:-2}"
+      MASSCAN_WAIT_SECONDS: "${MASSCAN_WAIT_SECONDS:-30}"
+      MASSCAN_INTERFACE: "${MASSCAN_INTERFACE:-}"
+      MASSCAN_UNPRIVILEGED: "${MASSCAN_UNPRIVILEGED:-false}"
+      ZMAP_BINARY: "${ZMAP_BINARY:-zmap}"
+      ZMAP_RATE: "${ZMAP_RATE:-1000}"
+      ZMAP_COOLDOWN_SECONDS: "${ZMAP_COOLDOWN_SECONDS:-8}"
+      ZMAP_INTERFACE: "${ZMAP_INTERFACE:-}"
+      PROBE_TIMEOUT: "${PROBE_TIMEOUT:-5s}"
+      PROBE_MAX_BODY_BYTES: "${PROBE_MAX_BODY_BYTES:-262144}"
+      PROBE_BACKEND: "${PROBE_BACKEND:-stdlib}"
+      PROBE_JARM_ENABLED: "${PROBE_JARM_ENABLED:-true}"
+      RDNS_PTR_ENABLED: "${RDNS_PTR_ENABLED:-false}"
+      RDNS_GO_PROCESSES: "${RDNS_GO_PROCESSES:-0}"
+      RDNS_TIMEOUT: "${RDNS_TIMEOUT:-2m}"
+      FDNS_ENABLED: "${FDNS_ENABLED:-false}"
+      FDNS_THREADS: "${FDNS_THREADS:-4}"
+      FDNS_TIMEOUT: "${FDNS_TIMEOUT:-2m}"
+      GEOIP_CITY_PATH: "${GEOIP_CITY_PATH:-}"
+      GEOIP_ASN_PATH: "${GEOIP_ASN_PATH:-}"
+      RETENTION_SNAPSHOTS: "${RETENTION_SNAPSHOTS:-720h}"
+      RETENTION_ALERT_EVENTS: "${RETENTION_ALERT_EVENTS:-720h}"
+      RETENTION_CHANGE_EVENTS: "${RETENTION_CHANGE_EVENTS:-2160h}"
+      RETENTION_HTTP_BODY: "${RETENTION_HTTP_BODY:-720h}"
+      RETENTION_HTTP_SCREENSHOTS: "${RETENTION_HTTP_SCREENSHOTS:-720h}"
+      RETENTION_TICK_EVERY: "${RETENTION_TICK_EVERY:-6h}"
+      HTTP_SCREENSHOT_ENABLED: "${HTTP_SCREENSHOT_ENABLED:-true}"
+      HTTP_SCREENSHOT_CHROMIUM_URL: "${HTTP_SCREENSHOT_CHROMIUM_URL:-http://chromium:9222}"
+      HTTP_SCREENSHOT_TIMEOUT: "${HTTP_SCREENSHOT_TIMEOUT:-15s}"
+      HTTP_SCREENSHOT_NAVIGATE_TIMEOUT: "${HTTP_SCREENSHOT_NAVIGATE_TIMEOUT:-10s}"
+      HTTP_SCREENSHOT_MAX_CONCURRENT: "${HTTP_SCREENSHOT_MAX_CONCURRENT:-4}"
+      HTTP_SCREENSHOT_VIEWPORT_WIDTH: "${HTTP_SCREENSHOT_VIEWPORT_WIDTH:-1280}"
+      HTTP_SCREENSHOT_VIEWPORT_HEIGHT: "${HTTP_SCREENSHOT_VIEWPORT_HEIGHT:-800}"
+      HTTP_SCREENSHOT_THUMBNAIL_WIDTH: "${HTTP_SCREENSHOT_THUMBNAIL_WIDTH:-640}"
+      HTTP_SCREENSHOT_JPEG_QUALITY: "${HTTP_SCREENSHOT_JPEG_QUALITY:-80}"
+      SCREENSHOT_WORKER_BATCH: "${SCREENSHOT_WORKER_BATCH:-8}"
+      CTLOGS_ENABLED: "${CTLOGS_ENABLED:-true}"
+      CTLOGS_BASE_URL: "${CTLOGS_BASE_URL:-https://crt.sh}"
+      CTLOGS_TIMEOUT: "${CTLOGS_TIMEOUT:-15s}"
+      CTLOGS_LIMIT: "${CTLOGS_LIMIT:-50}"
+      CTLOGS_ASM_LIMIT: "${CTLOGS_ASM_LIMIT:-0}"
+      CTLOGS_USER_AGENT: "${CTLOGS_USER_AGENT:-UltraViolet/0.1}"
+      CTLOGS_MAX_RETRIES: "${CTLOGS_MAX_RETRIES:-5}"
+      ASM_ENABLED: "${ASM_ENABLED:-true}"
+      ASM_INTERVAL: "${ASM_INTERVAL:-5s}"
+      ASM_RUNNING_TTL: "${ASM_RUNNING_TTL:-1h}"
+      RIPESTAT_ENABLED: "${RIPESTAT_ENABLED:-true}"
+      RIPESTAT_BASE_URL: "${RIPESTAT_BASE_URL:-https://stat.ripe.net}"
+      RIPESTAT_TIMEOUT: "${RIPESTAT_TIMEOUT:-20s}"
+      RIPESTAT_USER_AGENT: "${RIPESTAT_USER_AGENT:-UltraViolet/0.1}"
+      RIPESTAT_MAX_RETRIES: "${RIPESTAT_MAX_RETRIES:-3}"
+      RIPESTAT_MIN_INTERVAL: "${RIPESTAT_MIN_INTERVAL:-1100ms}"
+      FDNS_RESOLVERS: "${FDNS_RESOLVERS:-1.1.1.1:53,8.8.8.8:53}"
+      FDNS_QUERY_TIMEOUT: "${FDNS_QUERY_TIMEOUT:-3s}"
+      FDNS_RETRIES: "${FDNS_RETRIES:-1}"
+      RDAP_ENABLED: "${RDAP_ENABLED:-false}"
+      RDAP_BASE_URL: "${RDAP_BASE_URL:-https://rdap.org}"
+      RDAP_TIMEOUT: "${RDAP_TIMEOUT:-10s}"
+      NVD_BASE_URL: "${NVD_BASE_URL:-https://services.nvd.nist.gov}"
+      NVD_API_KEY: "${NVD_API_KEY:-}"
+      NVD_PAGE_SIZE: "${NVD_PAGE_SIZE:-2000}"
+      NVD_TIMEOUT: "${NVD_TIMEOUT:-30s}"
+      NVD_USER_AGENT: "${NVD_USER_AGENT:-UltraViolet/0.1}"
+      NVD_MAX_RETRIES: "${NVD_MAX_RETRIES:-5}"
+      NVD_MIN_INTERVAL: "${NVD_MIN_INTERVAL:-0s}"
+      CVE_SYNC_ENABLED: "${CVE_SYNC_ENABLED:-true}"
+      CVE_SYNC_INTERVAL: "${CVE_SYNC_INTERVAL:-6h}"
+      CVE_SYNC_BOOTSTRAP_FROM: "${CVE_SYNC_BOOTSTRAP_FROM:-262800h}"
+      CVE_SYNC_STORE_RAW_JSON: "${CVE_SYNC_STORE_RAW_JSON:-true}"
+      CVE_MATCH_ENABLED: "${CVE_MATCH_ENABLED:-true}"
+      CVE_MATCH_INTERVAL: "${CVE_MATCH_INTERVAL:-15m}"
+      CVE_MATCH_BATCH: "${CVE_MATCH_BATCH:-500}"
+      CVE_MATCH_CONCURRENCY: "${CVE_MATCH_CONCURRENCY:-8}"
+      CVE_RISK_ENABLED: "${CVE_RISK_ENABLED:-true}"
+      CVE_RISK_INTERVAL: "${CVE_RISK_INTERVAL:-24h}"
+      CVE_KEV_URL: "${CVE_KEV_URL:-https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json}"
+      CVE_EPSS_URL: "${CVE_EPSS_URL:-https://epss.cyentia.com/epss_scores-current.csv.gz}"
+      CVE_RISK_TIMEOUT: "${CVE_RISK_TIMEOUT:-60s}"
+      CVE_RISK_USER_AGENT: "${CVE_RISK_USER_AGENT:-UltraViolet/0.1}"
+    volumes:
+      - ./geoip:/geoip:ro
+      - ./catalog-seed:/ServiceAPI/seed:ro
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      uv-api:
+        condition: service_healthy
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    deploy:
+      resources:
+        limits:
+          memory: "${UV_SCANNER_MEMORY_LIMIT:-3g}"
+
+  service-frontend:
+    image: ${UV_REGISTRY:-docker.io/ultraviolet}/uv-frontend:${UV_VERSION:-dev}
+    platform: linux/amd64
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      UV_BASE_PATH: "${UV_BASE_PATH:-/}"
+    ports:
+      - "3000:8080"
+    depends_on:
+      uv-api:
+        condition: service_healthy
+    healthcheck:
+      # Alpine resolves localhost to ::1; nginx listens on IPv4 only.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: "${UV_FRONTEND_MEMORY_LIMIT:-512m}"
+
+  uv-documentation:
+    image: ${UV_REGISTRY:-docker.io/ultraviolet}/uv-documentation:${UV_VERSION:-dev}
+    platform: linux/amd64
+    restart: unless-stopped
+    logging: *default-logging
+    profiles: ["docs"]
+    ports:
+      - "${UV_DOCUMENTATION_PORT:-3002}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:80/ >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: "${UV_DOCUMENTATION_MEMORY_LIMIT:-128m}"
+
+  prometheus:
+    image: prom/prometheus:v3.4.0
+    restart: unless-stopped
+    logging: *default-logging
+    profiles: ["observability"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9091:9090"
+    depends_on:
+      - uv-api
+    deploy:
+      resources:
+        limits:
+          memory: "${PROMETHEUS_MEMORY_LIMIT:-2g}"
+
+  grafana:
+    image: grafana/grafana-oss:12.0.1
+    restart: unless-stopped
+    logging: *default-logging
+    profiles: ["observability"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          memory: "${GRAFANA_MEMORY_LIMIT:-1g}"
+
+  postgres-backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    profiles: ["backup"]
+    environment:
+      PGHOST: postgres
+      PGUSER: ultraviolet
+      PGDATABASE: ultraviolet
+      PGPASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        while true; do
+          export PGPASSWORD="$$(cat /run/secrets/postgres_password)";
+          ts=$$(date -u +%Y%m%dT%H%M%SZ);
+          pg_dump --format=custom --file=/backups/uv-$$ts.dump || true;
+          find /backups -type f -name 'uv-*.dump' -mtime +7 -delete || true;
+          sleep $${BACKUP_INTERVAL_SECONDS:-21600};
+        done
+
+  cve-catalog-dump:
+    image: postgres:16-alpine
+    profiles: ["dump"]
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: ultraviolet
+      PGDATABASE: ultraviolet
+    secrets:
+      - postgres_password
+    volumes:
+      - ../service-api/deploy/seed:/out
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        set -e &&
+        export PGPASSWORD="$$(cat /run/secrets/postgres_password)" &&
+        export PGSSLMODE=disable &&
+        mkdir -p /out &&
+        exec pg_dump -h postgres -p 5432 -U ultraviolet -d ultraviolet
+        -Fc --data-only --no-owner -t uv_cve -t uv_cve_cpe -f /out/cve-catalog.dump
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password
+
+volumes:
+  postgres-data:
+  prometheus-data:
+  grafana-data:
