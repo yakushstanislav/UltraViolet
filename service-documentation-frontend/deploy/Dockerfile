@@ -1,6 +1,9 @@
 
 FROM node:22-alpine AS build
 
+# VitePress lastUpdated shells out to git; without it the build fails with spawn ENOENT.
+RUN apk add --no-cache git
+
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
