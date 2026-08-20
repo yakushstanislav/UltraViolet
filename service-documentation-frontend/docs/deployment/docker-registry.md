@@ -46,6 +46,12 @@ docker compose -f docker-compose.registry.yml down       # keep data
 docker compose -f docker-compose.registry.yml down -v    # DROPS DATABASE
 ```
 
+PostgreSQL stores the password from the **first** `up` in its volume.
+Changing `POSTGRES_PASSWORD` in `.env` later does not update it — use
+`down -v` (or keep the original password). The beginner compose uses
+project name `ultraviolet-registry` so its volume does not collide with
+`make dev` / full `docker-compose.yml`.
+
 When you outgrow this file (TLS reverse proxy, PgBouncer, scheduled
 backups, Prometheus), switch to the full
 [Docker Compose](/deployment/docker-compose) stack and

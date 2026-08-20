@@ -17,6 +17,13 @@
 # For production hardening, reverse proxy, backups, and PgBouncer use the full
 # docker-compose.yml + install.sh path instead — see docs/deployment/.
 #
+# Project name keeps volumes separate from docker-compose.yml / make dev
+# (avoids "password authentication failed" when reusing an old postgres-data).
+# If you change POSTGRES_PASSWORD after the first start, reset the DB volume:
+#   docker compose -f docker-compose.registry.yml down -v
+#
+
+name: ultraviolet-registry
 
 x-logging: &default-logging
   driver: json-file
