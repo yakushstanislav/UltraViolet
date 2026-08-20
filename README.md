@@ -212,7 +212,7 @@ make build && make lint && make frontend-build && make docs-build
 ```bash
 git tag v0.1.0
 make release VERSION=v0.1.0
-make release-promote VERSION=v0.1.0   # :latest — separate step
+make release-promote VERSION=v0.1.0   # :latest — required for local releases; GitHub Actions does this automatically
 ```
 
 | Archive | Contents |

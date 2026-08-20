@@ -20,7 +20,8 @@ cd service-env
 cp env.registry.example .env
 # REQUIRED: set POSTGRES_PASSWORD, AUTH_JWT_SECRET, AUTH_BOOTSTRAP_PASSWORD
 #           (openssl rand -hex 32 for the first two)
-# OPTIONAL: set UV_VERSION to a released tag (e.g. v1.0.3) instead of latest
+# UV_VERSION defaults to latest (updated on each GitHub release).
+# From a release tarball it is already pinned to that release.
 
 mkdir -p geoip catalog-seed
 
@@ -59,14 +60,18 @@ backups, Prometheus), switch to the full
 | Frontend | `${UV_REGISTRY}/uv-frontend:${UV_VERSION}` |
 | Docs (optional) | `${UV_REGISTRY}/uv-documentation:${UV_VERSION}` |
 
-Defaults in the beginner compose:
+Defaults in the beginner compose (git checkout):
 
 ```bash
 UV_REGISTRY=docker.io/styakush
 UV_VERSION=latest
 ```
 
-Pin a release tag in production:
+Each GitHub tag release pushes `vX.Y.Z` **and** retags `:latest`.
+Release archives rewrite `env.registry.example` so `UV_VERSION` matches
+the packaged release (do not rely on `:latest` from a tarball).
+
+Pin explicitly when you need a specific build:
 
 ```bash
 UV_REGISTRY=docker.io/styakush

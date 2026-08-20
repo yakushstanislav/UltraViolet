@@ -73,6 +73,17 @@ To build on Apple Silicon, from the repository root run:
     cp .env.example .env
     ./install.sh
 
+## Installation (online, pull from Docker Hub)
+
+    tar xzf @ARCHIVE_BASE@.tar.gz
+    cd @ARCHIVE_BASE@
+    cp env.registry.example .env
+    # fill POSTGRES_PASSWORD, AUTH_JWT_SECRET, AUTH_BOOTSTRAP_PASSWORD
+    # UV_VERSION is already pinned to @UV_VERSION@
+    mkdir -p geoip catalog-seed
+    docker compose -f docker-compose.registry.yml pull
+    docker compose -f docker-compose.registry.yml up -d
+
 UI: http://localhost:3000  API: http://localhost:8080
 
 Requirements: Docker Engine 24+, docker compose, user in the `docker` group, `uname -m` = x86_64.
@@ -95,18 +106,29 @@ UVREADME
 }
 
 prepare_staging_env_example() {
-	if grep -q '^UV_REGISTRY=' "$STAGING/.env.example"; then
-		sed "s|^UV_REGISTRY=.*|UV_REGISTRY=${UV_REGISTRY}|" "$STAGING/.env.example" >"$STAGING/.env.example.tmp"
-		mv "$STAGING/.env.example.tmp" "$STAGING/.env.example"
-	fi
-	if grep -q '^UV_VERSION=' "$STAGING/.env.example"; then
-		sed "s/^UV_VERSION=.*/UV_VERSION=${VERSION}/" "$STAGING/.env.example" >"$STAGING/.env.example.tmp"
-		mv "$STAGING/.env.example.tmp" "$STAGING/.env.example"
-	fi
+	pin_env_file() {
+		local file=$1
+		if [[ ! -f "$file" ]]; then
+			return 0
+		fi
+		if grep -q '^UV_REGISTRY=' "$file"; then
+			sed "s|^UV_REGISTRY=.*|UV_REGISTRY=${UV_REGISTRY}|" "$file" >"${file}.tmp"
+			mv "${file}.tmp" "$file"
+		fi
+		if grep -q '^UV_VERSION=' "$file"; then
+			sed "s/^UV_VERSION=.*/UV_VERSION=${VERSION}/" "$file" >"${file}.tmp"
+			mv "${file}.tmp" "$file"
+		fi
+	}
+
+	pin_env_file "$STAGING/.env.example"
+	pin_env_file "$STAGING/env.registry.example"
 
 	# Release installs use production compose only (no local dev merge).
-	grep -v '^COMPOSE_FILE=' "$STAGING/.env.example" >"$STAGING/.env.example.tmp" &&
-		mv "$STAGING/.env.example.tmp" "$STAGING/.env.example"
+	if [[ -f "$STAGING/.env.example" ]]; then
+		grep -v '^COMPOSE_FILE=' "$STAGING/.env.example" >"$STAGING/.env.example.tmp" &&
+			mv "$STAGING/.env.example.tmp" "$STAGING/.env.example"
+	fi
 }
 
 pack_archive() {

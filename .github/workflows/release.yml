@@ -94,6 +94,11 @@ jobs:
           make -C service-frontend docker-push
           make -C service-documentation-frontend docker-push
 
+      - name: Promote images to :latest
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: make release-promote
+
       - name: Build release archives
         env:
           VERSION: ${{ github.ref_name }}
