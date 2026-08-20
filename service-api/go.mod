@@ -1,6 +1,6 @@
 module github.com/yakushstanislav/UltraViolet/service-api
 
-go 1.25.0
+go 1.25.7
 
 require (
 	github.com/Masterminds/squirrel v1.5.4

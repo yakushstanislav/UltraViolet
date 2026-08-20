@@ -1,6 +1,6 @@
 
 GO_CACHE ?= /tmp/uv-go-build
-UV_REGISTRY ?= docker.io/ultraviolet
+UV_REGISTRY ?= docker.io/styakush
 # Production Linux hosts are amd64; keep explicit so Apple Silicon builds do not ship arm64 images.
 DOCKER_PLATFORM ?= linux/amd64
 VERSION ?=

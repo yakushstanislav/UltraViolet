@@ -9,7 +9,7 @@ in a more readable form. Update both when you add a variable.
 | Variable | Default | Used by | Notes |
 |---|---|---|---|
 | `COMPOSE_FILE` | `docker-compose.yml:docker-compose.dev.yml` | Compose | Stripped from release archives. |
-| `UV_REGISTRY` | `docker.io/ultraviolet` | Compose | Image prefix. |
+| `UV_REGISTRY` | `docker.io/styakush` | Compose | Image prefix. See [Docker Registry](/deployment/docker-registry). |
 | `UV_VERSION` | `dev` | Compose | Image tag. |
 
 ## GeoIP

@@ -129,7 +129,7 @@ verify_offline_images_linux_amd64() {
 	esac
 
 	local uv_registry uv_version
-	uv_registry=docker.io/ultraviolet
+	uv_registry=docker.io/styakush
 	uv_version=dev
 	if [[ -f "${ROOT_DIR}/VERSION" ]]; then
 		uv_version=$(tr -d '[:space:]' <"${ROOT_DIR}/VERSION")

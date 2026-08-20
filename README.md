@@ -206,7 +206,7 @@ make release-promote VERSION=v0.1.0   # :latest — separate step
 
 **Offline:** `./install.sh` (`docker load`, no pull). Upgrade: keep `.env`, `secrets/`, and the Postgres volume → `./upgrade.sh`.
 
-Variables: `UV_REGISTRY` (default `docker.io/ultraviolet`), `DRY_RUN=1` — local smoke build without push.
+Variables: `UV_REGISTRY` (default `docker.io/styakush`), `DRY_RUN=1` — local smoke build without push.
 
 <details>
 <summary><strong>Offline installation — step by step</strong></summary>

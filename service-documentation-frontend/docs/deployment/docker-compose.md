@@ -105,9 +105,14 @@ memory in the bundled `postgresql.conf`. On an 8 GB host, `uv-api` +
 ## Image registry and version
 
 ```bash
-UV_REGISTRY=docker.io/ultraviolet
+UV_REGISTRY=docker.io/styakush
 UV_VERSION=v0.1.0
 ```
+
+Point `UV_REGISTRY` at your own registry or Docker Hub namespace when
+you publish private builds. Auth, image names, and an example Dockerfile
+that extends a published tag are in
+[Docker Registry](/deployment/docker-registry).
 
 For air-gapped installs the registry never gets called; `install.sh`
 loads tarred images from `images/` instead — see

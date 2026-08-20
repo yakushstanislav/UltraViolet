@@ -20,7 +20,8 @@ UltraViolet ships as a Docker Compose stack. The release artefacts are in
 ```bash
 tar xzf ultraviolet-v0.1.0.tar.gz && cd ultraviolet-v0.1.0
 cp .env.example .env
-# edit .env: POSTGRES_PASSWORD, AUTH_JWT_SECRET, AUTH_BOOTSTRAP_*, CORS, SCAN_ALLOWED_CIDRS
+# edit .env: UV_REGISTRY, UV_VERSION, POSTGRES_PASSWORD, AUTH_JWT_SECRET,
+# AUTH_BOOTSTRAP_*, CORS, SCAN_ALLOWED_CIDRS
 ./install.sh             # docker compose pull + secret generation
 docker compose up -d
 ```
@@ -29,6 +30,11 @@ docker compose up -d
 `secrets/auth_jwt_secret` if they do not exist, then runs `docker compose
 pull`. It refuses to start if `.env` still contains placeholder values for
 production secrets — see [Secrets](/deployment/secrets) for details.
+
+Private registries and custom image prefixes: set `UV_REGISTRY` /
+`UV_VERSION`, run `docker login`, and (optionally) extend a published
+image with a thin Dockerfile — see
+[Docker Registry](/deployment/docker-registry).
 
 ## Offline install (no registry access)
 

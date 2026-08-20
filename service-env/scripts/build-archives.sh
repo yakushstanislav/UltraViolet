@@ -8,7 +8,7 @@ REPO_ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 ENV_DIR="${REPO_ROOT}/service-env"
 DIST_DIR="${REPO_ROOT}/dist"
 
-UV_REGISTRY="${UV_REGISTRY:-docker.io/ultraviolet}"
+UV_REGISTRY="${UV_REGISTRY:-docker.io/styakush}"
 DOCKER_PLATFORM="${DOCKER_PLATFORM:-linux/amd64}"
 PGBOUNCER_IMAGE="${PGBOUNCER_IMAGE:-edoburu/pgbouncer:v1.25.1-p0}"
 CHROMIUM_IMAGE="${CHROMIUM_IMAGE:-chromedp/headless-shell:latest}"

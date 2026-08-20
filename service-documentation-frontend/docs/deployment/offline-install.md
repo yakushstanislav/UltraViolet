@@ -118,8 +118,8 @@ point.
 After `install.sh`, confirm the images you loaded:
 
 ```bash
-docker image ls docker.io/ultraviolet/*
-docker image inspect docker.io/ultraviolet/uv-api:v0.1.0 \
+docker image ls docker.io/styakush/*
+docker image inspect docker.io/styakush/uv-api:v0.1.0 \
   --format '{{.Architecture}}'
 ```
 

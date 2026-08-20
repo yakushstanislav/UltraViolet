@@ -1,6 +1,6 @@
 
 PWD := $(shell pwd)
-UV_REGISTRY ?= docker.io/ultraviolet
+UV_REGISTRY ?= docker.io/styakush
 UV_VERSION ?= dev
 DOCKER_PLATFORM ?= linux/amd64
 GIT_HASH := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)

@@ -120,6 +120,7 @@ const sidebar = [
     collapsed: false,
     items: [
       { text: 'Docker Compose', link: '/deployment/docker-compose' },
+      { text: 'Docker Registry', link: '/deployment/docker-registry' },
       { text: 'Environment Reference', link: '/deployment/env-reference' },
       { text: 'Secrets', link: '/deployment/secrets' },
       { text: 'Reverse Proxy', link: '/deployment/reverse-proxy' },

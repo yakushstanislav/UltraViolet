@@ -106,7 +106,7 @@ services:
           memory: "${CHROMIUM_MEMORY_LIMIT:-1g}"
 
   uv-api:
-    image: ${UV_REGISTRY:-docker.io/ultraviolet}/uv-api:${UV_VERSION:-dev}
+    image: ${UV_REGISTRY:-docker.io/styakush}/uv-api:${UV_VERSION:-dev}
     platform: linux/amd64
     restart: unless-stopped
     logging: *default-logging
@@ -187,7 +187,7 @@ services:
           memory: "${UV_API_MEMORY_LIMIT:-2g}"
 
   uv-scanner:
-    image: ${UV_REGISTRY:-docker.io/ultraviolet}/uv-scanner:${UV_VERSION:-dev}
+    image: ${UV_REGISTRY:-docker.io/styakush}/uv-scanner:${UV_VERSION:-dev}
     platform: linux/amd64
     restart: unless-stopped
     logging: *default-logging
@@ -323,7 +323,7 @@ services:
           memory: "${UV_SCANNER_MEMORY_LIMIT:-3g}"
 
   service-frontend:
-    image: ${UV_REGISTRY:-docker.io/ultraviolet}/uv-frontend:${UV_VERSION:-dev}
+    image: ${UV_REGISTRY:-docker.io/styakush}/uv-frontend:${UV_VERSION:-dev}
     platform: linux/amd64
     restart: unless-stopped
     logging: *default-logging
@@ -350,7 +350,7 @@ services:
           memory: "${UV_FRONTEND_MEMORY_LIMIT:-512m}"
 
   uv-documentation:
-    image: ${UV_REGISTRY:-docker.io/ultraviolet}/uv-documentation:${UV_VERSION:-dev}
+    image: ${UV_REGISTRY:-docker.io/styakush}/uv-documentation:${UV_VERSION:-dev}
     platform: linux/amd64
     restart: unless-stopped
     logging: *default-logging
