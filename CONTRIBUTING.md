@@ -21,6 +21,10 @@ participating, you agree to uphold it.
 
 ### Full stack (Docker)
 
+Requires **Go 1.25+** and Docker. API/scanner images copy host-built
+`linux/amd64` binaries from `service-api/bin/` (`make dev` runs
+`build-linux` first).
+
 ```bash
 cd service-env
 cp .env.example .env

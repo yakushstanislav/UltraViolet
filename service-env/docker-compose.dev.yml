@@ -1,6 +1,9 @@
 #
 # Development override — merged via COMPOSE_FILE in .env (or -f twice, or `make dev`).
 # pull_policy: build avoids pulling private registry images before local build.
+#
+# uv-api / uv-scanner COPY service-api/bin/* — run `make -C service-api build-linux`
+# (or root/service-env `make dev`) before compose --build, or the image build fails.
 
 services:
   postgres:

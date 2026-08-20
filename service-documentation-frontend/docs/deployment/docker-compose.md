@@ -143,17 +143,50 @@ services:
   loops.
 - Enables verbose logging (`LOGGER_DEBUG=true`).
 
+`uv-api` and `uv-scanner` use a runtime-only Dockerfile that
+`COPY`s prebuilt binaries from `service-api/bin/`. `make dev` (in
+`service-env/` or the repo root) runs `make -C service-api build-linux`
+before `docker compose … --build`. Building those images without that
+step fails when `bin/` is empty. Host requirement: Go 1.25+.
+
 Activated by default through `COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml`
 in `.env.example`. Release archives strip that line — they pull from
 the registry.
 
 ## Start, stop, inspect
 
+**Development** (`.env` with the dev overlay from `.env.example`) — first
+start and rebuilds must go through `make` so Go binaries exist before
+the image build:
+
 ```bash
-docker compose up -d                # start
-docker compose ps                   # status
-docker compose logs -f uv-api       # tail one service
-docker compose logs --since 10m     # everything in the last 10 min
+cd service-env   # or from repo root: make -C service-env dev
+make dev         # build-linux + compose up --build
+```
+
+Do **not** run bare `docker compose up -d` / `up --build` on a fresh
+clone with the dev overlay: Compose will build `uv-api`/`uv-scanner`
+while `service-api/bin/` is empty and `COPY bin/*` will fail. Always
+`make dev` (or `make -C service-api build-linux` first).
+
+With that `.env` loaded, day-to-day compose commands pick up both files
+via `COMPOSE_FILE`:
+
+```bash
+docker compose ps
+docker compose logs -f uv-api
 docker compose down                 # stop without removing volumes
 docker compose down -v              # stop and remove volumes (DROPS DATA)
+```
+
+**Release / online install** (images already pulled or loaded — no
+`build:`):
+
+```bash
+docker compose up -d
+docker compose ps
+docker compose logs -f uv-api
+docker compose logs --since 10m
+docker compose down
+docker compose down -v              # DROPS DATA
 ```

@@ -50,18 +50,28 @@ The `*-offline-full.tar.gz` variant adds the CVE catalog seed
 
 ## Development install (source build)
 
+**Extra requirements:** Go 1.25+ on the host (in addition to Docker). The
+`uv-api` / `uv-scanner` Dockerfiles copy binaries from
+`service-api/bin/` — they do not compile Go inside the image.
+
 ```bash
 git clone https://github.com/<your-fork>/UltraViolet.git
 cd UltraViolet
 cp service-env/.env.example service-env/.env
+mkdir -p service-env/secrets
 openssl rand -hex 32 > service-env/secrets/postgres_password
 openssl rand -hex 32 > service-env/secrets/auth_jwt_secret
 make dev
 ```
 
-`make dev` runs `docker compose -f docker-compose.yml -f
-docker-compose.dev.yml up --build`, which builds the `uv-api`,
-`uv-scanner`, and `service-frontend` images from source.
+`make dev` first runs `make -C service-api build-linux` (cross-compiles
+`uv-api` and `uv-scanner` into `service-api/bin/`), then
+`docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+--build`, which builds the API, scanner, and frontend images from
+source.
+
+After changing Go code, re-run `make -C service-api build-linux` (or
+`make dev` again) so the next image build picks up new binaries.
 
 UI is available at `http://localhost:3000`, REST API at
 `http://localhost:8080`, Prometheus metrics at `http://localhost:9090`.

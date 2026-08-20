@@ -11,11 +11,15 @@ make build
 ## Docker build
 
 ```bash
-make docker
+make docker          # build-linux + docker buildx (local tags)
+# or, for compose:
+make -C ../service-env dev   # build-linux then compose --build
 ```
 
-Docker image now follows the WantVisit backend pattern: binaries are built first
-into `bin/` and then copied into a minimal runtime image.
+Runtime Dockerfile (`deploy/Dockerfile`) copies prebuilt binaries from
+`bin/` into a minimal Alpine image — it does **not** compile Go. Always
+run `make build-linux` (or `make docker` / root `make dev`) before a
+compose/image build, or `COPY bin/*` will fail on an empty directory.
 
 ## Quality gates
 

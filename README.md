@@ -100,7 +100,9 @@ Backend development rules: [`CLAUDE.md`](CLAUDE.md).
 
 ## 🚀 Quick start
 
-**Requirements:** Docker Engine ≥ 24, ~4 GB RAM, Linux **amd64** for production images.
+**Requirements:** Go 1.25+, Docker Engine ≥ 24, ~4 GB RAM. Production images target Linux **amd64**.
+
+The API/scanner images copy prebuilt binaries from `service-api/bin/` (they are **not** compiled inside Docker). `make dev` runs `make -C service-api build-linux` before `docker compose … --build`.
 
 ```bash
 git clone https://github.com/yakushstanislav/UltraViolet.git
@@ -145,8 +147,10 @@ Key sections: [installation](service-documentation-frontend/docs/getting-started
 ### Full Docker
 
 ```bash
-make dev    # compose prod + dev override, hot-rebuild
+make dev    # build-linux → compose prod + dev override --build
 ```
+
+Rebuild Go binaries after backend changes (`make -C service-api build-linux`), then restart or re-run `make dev`.
 
 ### Hybrid mode (faster backend iteration)
 

@@ -8,6 +8,8 @@ CVE_CATALOG_DUMP ?= ../service-api/deploy/seed/cve-catalog.dump
 
 dev:
 	@bash scripts/sync-dev-secrets.sh
+	# uv-api/uv-scanner Dockerfiles COPY prebuilt binaries from service-api/bin/
+	@$(MAKE) -C ../service-api build-linux
 	@$(COMPOSE_DEV) up --build
 
 dev-db:
