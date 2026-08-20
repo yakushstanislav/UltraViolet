@@ -14,7 +14,8 @@ RUN npm run build
 
 FROM nginx:1.28-alpine
 
-RUN apk add --no-cache curl
+RUN apk upgrade --no-cache \
+ && apk add --no-cache curl
 
 COPY deploy/nginx.conf /etc/nginx/nginx.conf
 COPY --from=build /app/docs/.vitepress/dist /usr/share/nginx/html

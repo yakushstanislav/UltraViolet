@@ -30,7 +30,10 @@ FROM ${NGINX_IMAGE}
 
 USER root
 
-RUN apk add --no-cache curl gettext
+# Pick up Alpine security fixes (e.g. OpenSSL CVE patches) that may land
+# after the pinned nginx base image was published.
+RUN apk upgrade --no-cache \
+ && apk add --no-cache curl gettext
 
 COPY deploy/nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY deploy/entrypoint.sh /docker-entrypoint.d/40-render-config.sh

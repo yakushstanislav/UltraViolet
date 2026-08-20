@@ -12,6 +12,8 @@ jobs:
   release:
     name: Build and publish
     runs-on: ubuntu-latest
+    env:
+      UV_REGISTRY: ${{ secrets.UV_REGISTRY || 'docker.io/styakush' }}
     steps:
       - uses: actions/checkout@v5
 
@@ -29,7 +31,7 @@ jobs:
       - name: Log in to container registry
         uses: docker/login-action@v4
         with:
-          registry: ${{ secrets.REGISTRY_HOST }}
+          registry: ${{ secrets.REGISTRY_HOST || 'docker.io' }}
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
@@ -39,7 +41,6 @@ jobs:
       - name: Build images
         env:
           UV_VERSION: ${{ github.ref_name }}
-          UV_REGISTRY: ${{ secrets.UV_REGISTRY }}
         run: |
           make -C service-api docker-release
           make -C service-frontend docker-release
@@ -48,43 +49,46 @@ jobs:
       - name: Scan images with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
+          version: v0.74.0
           scan-type: image
           severity: CRITICAL
           exit-code: '1'
           ignore-unfixed: true
-          image-ref: ${{ secrets.UV_REGISTRY }}/uv-api:${{ github.ref_name }}
+          image-ref: ${{ env.UV_REGISTRY }}/uv-api:${{ github.ref_name }}
 
       - name: Scan uv-scanner image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
+          version: v0.74.0
           scan-type: image
           severity: CRITICAL
           exit-code: '1'
           ignore-unfixed: true
-          image-ref: ${{ secrets.UV_REGISTRY }}/uv-scanner:${{ github.ref_name }}
+          image-ref: ${{ env.UV_REGISTRY }}/uv-scanner:${{ github.ref_name }}
 
       - name: Scan uv-frontend image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
+          version: v0.74.0
           scan-type: image
           severity: CRITICAL
           exit-code: '1'
           ignore-unfixed: true
-          image-ref: ${{ secrets.UV_REGISTRY }}/uv-frontend:${{ github.ref_name }}
+          image-ref: ${{ env.UV_REGISTRY }}/uv-frontend:${{ github.ref_name }}
 
       - name: Scan uv-documentation image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
+          version: v0.74.0
           scan-type: image
           severity: CRITICAL
           exit-code: '1'
           ignore-unfixed: true
-          image-ref: ${{ secrets.UV_REGISTRY }}/uv-documentation:${{ github.ref_name }}
+          image-ref: ${{ env.UV_REGISTRY }}/uv-documentation:${{ github.ref_name }}
 
       - name: Push images
         env:
           UV_VERSION: ${{ github.ref_name }}
-          UV_REGISTRY: ${{ secrets.UV_REGISTRY }}
         run: |
           make -C service-api docker-push
           make -C service-frontend docker-push
@@ -93,7 +97,6 @@ jobs:
       - name: Build release archives
         env:
           VERSION: ${{ github.ref_name }}
-          UV_REGISTRY: ${{ secrets.UV_REGISTRY }}
         run: bash service-env/scripts/build-archives.sh
 
       - name: Upload dist artifacts
