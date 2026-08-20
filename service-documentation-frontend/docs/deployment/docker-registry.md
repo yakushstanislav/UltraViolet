@@ -1,11 +1,54 @@
 # Docker Registry
 
-Production installs pull pre-built images from a registry. The compose
-file never builds UltraViolet services from source — every UltraViolet
-service uses `image: ${UV_REGISTRY}/…:${UV_VERSION}`.
+Production installs pull pre-built images from a registry. UltraViolet
+never builds application images on the install host when you use the
+registry compose files — every UltraViolet service uses
+`image: ${UV_REGISTRY}/…:${UV_VERSION}`.
 
 For air-gapped hosts use [Offline Install](/deployment/offline-install)
 instead; that path loads tarred images and never calls the registry.
+
+## Beginner path (recommended)
+
+The simplest way to run UltraViolet from Docker Hub is
+`service-env/docker-compose.registry.yml`. It pulls images, skips
+PgBouncer / observability / backup sidecars, and needs only a short
+`.env`.
+
+```bash
+cd service-env
+cp env.registry.example .env
+# REQUIRED: set POSTGRES_PASSWORD, AUTH_JWT_SECRET, AUTH_BOOTSTRAP_PASSWORD
+#           (openssl rand -hex 32 for the first two)
+# OPTIONAL: set UV_VERSION to a released tag (e.g. v1.0.3) instead of latest
+
+mkdir -p geoip catalog-seed
+
+docker compose -f docker-compose.registry.yml pull
+docker compose -f docker-compose.registry.yml up -d
+
+# UI:        http://localhost:3000
+# API:       http://localhost:8080/readyz
+# Docs site: docker compose -f docker-compose.registry.yml --profile docs up -d
+#            → http://localhost:3002
+```
+
+| File | Purpose |
+|---|---|
+| `docker-compose.registry.yml` | Beginner stack — pull from registry only |
+| `env.registry.example` | Minimal `.env` template for that compose file |
+
+Stop / reset:
+
+```bash
+docker compose -f docker-compose.registry.yml down       # keep data
+docker compose -f docker-compose.registry.yml down -v    # DROPS DATABASE
+```
+
+When you outgrow this file (TLS reverse proxy, PgBouncer, scheduled
+backups, Prometheus), switch to the full
+[Docker Compose](/deployment/docker-compose) stack and
+[Installation](/getting-started/installation) (`install.sh`).
 
 ## Image names
 
@@ -16,11 +59,18 @@ instead; that path loads tarred images and never calls the registry.
 | Frontend | `${UV_REGISTRY}/uv-frontend:${UV_VERSION}` |
 | Docs (optional) | `${UV_REGISTRY}/uv-documentation:${UV_VERSION}` |
 
-Set both variables in `.env` before `install.sh` / `docker compose pull`:
+Defaults in the beginner compose:
 
 ```bash
 UV_REGISTRY=docker.io/styakush
-UV_VERSION=v0.1.0
+UV_VERSION=latest
+```
+
+Pin a release tag in production:
+
+```bash
+UV_REGISTRY=docker.io/styakush
+UV_VERSION=v1.0.3
 ```
 
 Private registries use the same shape — only the prefix changes:
@@ -28,14 +78,6 @@ Private registries use the same shape — only the prefix changes:
 ```bash
 UV_REGISTRY=registry.example.com/ultraviolet
 UV_VERSION=v0.1.0
-```
-
-Docker Hub under this project account:
-
-```bash
-UV_REGISTRY=docker.io/styakush
-UV_VERSION=v0.1.0
-# → docker.io/styakush/uv-api:v0.1.0, …/uv-scanner:v0.1.0, …
 ```
 
 ## Authenticate to a private registry
@@ -54,7 +96,7 @@ On the install host the login must succeed for the user that runs
 via `REGISTRY_HOST`, `REGISTRY_USERNAME`, and `REGISTRY_PASSWORD`
 (see the shipping `.github/workflows/release.yml`).
 
-Then:
+Full production install (archives + `install.sh`):
 
 ```bash
 cp .env.example .env
@@ -147,7 +189,7 @@ builds from source instead of pulling.
 ## Related
 
 - [Installation](/getting-started/installation) — online pull vs offline load
-- [Docker Compose](/deployment/docker-compose) — service list and healthchecks
+- [Docker Compose](/deployment/docker-compose) — full production service list
 - [Environment Reference](/deployment/env-reference) — `UV_REGISTRY`, `UV_VERSION`
 - [Offline Install](/deployment/offline-install) — no registry access
 - [Upgrade](/deployment/upgrade) — `docker compose pull` of a new tag

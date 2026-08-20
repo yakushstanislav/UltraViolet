@@ -5,6 +5,13 @@ The shipping deployment is a single `docker-compose.yml` in
 `docker-compose.dev.yml` is the development overlay that builds images
 from source and bumps a few connection-pool sizes.
 
+**New to UltraViolet?** Start with
+[`docker-compose.registry.yml`](/deployment/docker-registry) — a
+beginner-oriented file that only pulls images from Docker Hub
+(`docker.io/styakush`) and needs a short `.env`
+(`env.registry.example`). Come back to this page when you need
+PgBouncer, observability, or scheduled backups.
+
 ## Services
 
 | Service | Image | Ports (host:container) | Notes |

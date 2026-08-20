@@ -102,6 +102,25 @@ Backend development rules: [`CLAUDE.md`](CLAUDE.md).
 
 **Requirements:** Go 1.25+, Docker Engine ≥ 24, ~4 GB RAM. Production images target Linux **amd64**.
 
+### Run from Docker Hub (no source build)
+
+Beginner path — pull published images with
+[`service-env/docker-compose.registry.yml`](service-env/docker-compose.registry.yml):
+
+```bash
+cd service-env
+cp env.registry.example .env
+# set POSTGRES_PASSWORD, AUTH_JWT_SECRET, AUTH_BOOTSTRAP_PASSWORD
+mkdir -p geoip catalog-seed
+docker compose -f docker-compose.registry.yml pull
+docker compose -f docker-compose.registry.yml up -d
+# UI → http://localhost:3000
+```
+
+See [Docker Registry](service-documentation-frontend/docs/deployment/docker-registry.md) in the docs site.
+
+### Develop from source
+
 The API/scanner images copy prebuilt binaries from `service-api/bin/` (they are **not** compiled inside Docker). `make dev` runs `make -C service-api build-linux` before `docker compose … --build`.
 
 ```bash

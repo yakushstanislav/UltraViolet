@@ -32,7 +32,9 @@ prepare_staging() {
 	mkdir -p "$STAGING/scripts" "$STAGING/secrets.template" "$DIST_DIR"
 
 	cp "${ENV_DIR}/docker-compose.yml" "$STAGING/"
+	cp "${ENV_DIR}/docker-compose.registry.yml" "$STAGING/"
 	cp "${ENV_DIR}/.env.example" "$STAGING/"
+	cp "${ENV_DIR}/env.registry.example" "$STAGING/"
 	cp -a "${ENV_DIR}/postgres" "$STAGING/"
 	echo "$VERSION" >"$STAGING/VERSION"
 

@@ -17,6 +17,24 @@ UltraViolet ships as a Docker Compose stack. The release artefacts are in
 
 ## Online install (pull from registry)
 
+### Beginner (Docker Hub compose)
+
+Smallest path — one compose file, no `install.sh`:
+
+```bash
+cd service-env
+cp env.registry.example .env
+# set POSTGRES_PASSWORD, AUTH_JWT_SECRET, AUTH_BOOTSTRAP_PASSWORD
+mkdir -p geoip catalog-seed
+docker compose -f docker-compose.registry.yml pull
+docker compose -f docker-compose.registry.yml up -d
+# UI → http://localhost:3000
+```
+
+Details: [Docker Registry](/deployment/docker-registry).
+
+### Full stack (release archive)
+
 ```bash
 tar xzf ultraviolet-v0.1.0.tar.gz && cd ultraviolet-v0.1.0
 cp .env.example .env

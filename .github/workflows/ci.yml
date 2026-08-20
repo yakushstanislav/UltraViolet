@@ -108,3 +108,16 @@ jobs:
             echo "Production docker-compose.yml must not contain build: blocks" >&2
             exit 1
           fi
+
+      - name: Validate beginner registry compose (no build blocks)
+        working-directory: service-env
+        run: |
+          # Provide dummy required env so ${VAR:?} interpolations succeed.
+          POSTGRES_PASSWORD=ci AUTH_JWT_SECRET=ci AUTH_BOOTSTRAP_PASSWORD=ci \
+            docker compose -f docker-compose.registry.yml --env-file env.registry.example config >/dev/null
+          if POSTGRES_PASSWORD=ci AUTH_JWT_SECRET=ci AUTH_BOOTSTRAP_PASSWORD=ci \
+            docker compose -f docker-compose.registry.yml --env-file env.registry.example config 2>/dev/null \
+            | grep -E '^[[:space:]]+build:'; then
+            echo "docker-compose.registry.yml must not contain build: blocks" >&2
+            exit 1
+          fi

@@ -1,0 +1,223 @@
+#
+# Beginner deploy — pull UltraViolet images from Docker Hub (no source build).
+#
+# Quick start:
+#   1. cd service-env
+#   2. cp env.registry.example .env
+#   3. Edit .env — set POSTGRES_PASSWORD, AUTH_JWT_SECRET, AUTH_BOOTSTRAP_PASSWORD
+#   4. mkdir -p geoip catalog-seed
+#   5. docker compose -f docker-compose.registry.yml pull
+#   6. docker compose -f docker-compose.registry.yml up -d
+#   7. Open http://localhost:3000  (bootstrap user from .env)
+#
+# Optional docs site:
+#   docker compose -f docker-compose.registry.yml --profile docs up -d
+#
+# Images come from UV_REGISTRY / UV_VERSION (defaults: docker.io/styakush + latest).
+# For production hardening, reverse proxy, backups, and PgBouncer use the full
+# docker-compose.yml + install.sh path instead — see docs/deployment/.
+#
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    platform: linux/amd64
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_DB: ultraviolet
+      POSTGRES_USER: ultraviolet
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ultraviolet -d ultraviolet"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    security_opt:
+      - no-new-privileges:true
+
+  chromium:
+    image: chromedp/headless-shell:latest
+    platform: linux/amd64
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - --disable-gpu
+      - --hide-scrollbars
+      - --mute-audio
+      - --ignore-certificate-errors
+    expose:
+      - "9222"
+    security_opt:
+      - no-new-privileges:true
+
+  uv-api:
+    image: ${UV_REGISTRY:-docker.io/styakush}/uv-api:${UV_VERSION:-latest}
+    platform: linux/amd64
+    restart: unless-stopped
+    logging: *default-logging
+    env_file:
+      - .env
+    environment:
+      LOGGER_NAME: uv-api
+      LOGGER_DEBUG: "${LOGGER_DEBUG:-false}"
+      SERVER_ADDR: 0.0.0.0
+      SERVER_PORT: "8080"
+      METRICS_ADDR: 0.0.0.0
+      METRICS_PORT: "9090"
+      REALTIME_ADDR: 0.0.0.0
+      REALTIME_PORT: "8081"
+      REALTIME_WS_ALLOWED_ROLES: viewer,operator,admin
+      POSTGRES_ADDR: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USERNAME: ultraviolet
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DATABASE: ultraviolet
+      POSTGRES_SCHEMA_PATH: /ServiceAPI/migrations
+      POSTGRES_MAX_CONNECTIONS: "10"
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?Set AUTH_JWT_SECRET in .env}
+      AUTH_ACCESS_TTL: "${AUTH_ACCESS_TTL:-15m}"
+      AUTH_REFRESH_TTL: "${AUTH_REFRESH_TTL:-168h}"
+      AUTH_BOOTSTRAP_USERNAME: "${AUTH_BOOTSTRAP_USERNAME:-admin}"
+      AUTH_BOOTSTRAP_PASSWORD: ${AUTH_BOOTSTRAP_PASSWORD:?Set AUTH_BOOTSTRAP_PASSWORD in .env}
+      AUTH_BOOTSTRAP_ROLE: "${AUTH_BOOTSTRAP_ROLE:-admin}"
+      AUTH_RATE_LIMIT_RPS: "5"
+      AUTH_RATE_LIMIT_BURST: "20"
+      AUDIT_TRUST_PROXY_HEADERS: "false"
+      APP_ENV: "${APP_ENV:-development}"
+      CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}"
+      SCAN_ALLOWED_CIDRS: "${SCAN_ALLOWED_CIDRS:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128}"
+      SCAN_MAX_HOSTS: "${SCAN_MAX_HOSTS:-1024}"
+      SCAN_MAX_PORTS: "${SCAN_MAX_PORTS:-64}"
+      CVE_SYNC_BOOTSTRAP_FROM: "${CVE_SYNC_BOOTSTRAP_FROM:-262800h}"
+      RTSP_SNAPSHOT_ENABLED: "true"
+      ONVIF_COMMAND_ENABLED: "true"
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+      - "9090:9090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./catalog-seed:/ServiceAPI/seed:ro
+      - ./geoip:/geoip:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/readyz >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 300s
+    cap_drop:
+      - ALL
+
+  uv-scanner:
+    image: ${UV_REGISTRY:-docker.io/styakush}/uv-scanner:${UV_VERSION:-latest}
+    platform: linux/amd64
+    restart: unless-stopped
+    logging: *default-logging
+    env_file:
+      - .env
+    environment:
+      LOGGER_NAME: uv-scanner
+      LOGGER_DEBUG: "${LOGGER_DEBUG:-false}"
+      METRICS_ADDR: 0.0.0.0
+      METRICS_PORT: "9091"
+      POSTGRES_ADDR: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USERNAME: ultraviolet
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DATABASE: ultraviolet
+      POSTGRES_MAX_CONNECTIONS: "20"
+      SCANNER_WORKER_POLL_INTERVAL: "1s"
+      SCANNER_BACKGROUND_POLL_INTERVAL: "30s"
+      SCANNER_PROGRESS_INTERVAL: "1s"
+      SCANNER_PROBE_WORKERS: "24"
+      SCANNER_RUNNING_TTL: "1h"
+      SCAN_ALLOWED_CIDRS: "${SCAN_ALLOWED_CIDRS:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128}"
+      SCAN_MAX_HOSTS: "${SCAN_MAX_HOSTS:-1024}"
+      SCAN_MAX_PORTS: "${SCAN_MAX_PORTS:-64}"
+      PORTSCAN_WORKERS: "256"
+      PORTSCAN_TIMEOUT: "2s"
+      PORTSCAN_RATE_PER_SEC: "2000"
+      PROBE_TIMEOUT: "5s"
+      PROBE_BACKEND: stdlib
+      HTTP_SCREENSHOT_ENABLED: "true"
+      HTTP_SCREENSHOT_CHROMIUM_URL: "http://chromium:9222"
+      CVE_SYNC_ENABLED: "${CVE_SYNC_ENABLED:-true}"
+      CVE_MATCH_ENABLED: "${CVE_MATCH_ENABLED:-true}"
+      CVE_RISK_ENABLED: "${CVE_RISK_ENABLED:-true}"
+      ASM_ENABLED: "true"
+      CTLOGS_ENABLED: "true"
+      RIPESTAT_ENABLED: "true"
+    volumes:
+      - ./geoip:/geoip:ro
+      - ./catalog-seed:/ServiceAPI/seed:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      uv-api:
+        condition: service_healthy
+      chromium:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 6
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+
+  service-frontend:
+    image: ${UV_REGISTRY:-docker.io/styakush}/uv-frontend:${UV_VERSION:-latest}
+    platform: linux/amd64
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      UV_BASE_PATH: "/"
+    ports:
+      - "3000:8080"
+    depends_on:
+      uv-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  uv-documentation:
+    image: ${UV_REGISTRY:-docker.io/styakush}/uv-documentation:${UV_VERSION:-latest}
+    platform: linux/amd64
+    restart: unless-stopped
+    logging: *default-logging
+    profiles: ["docs"]
+    ports:
+      - "3002:80"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:80/ >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  postgres-data:
